@@ -302,6 +302,7 @@ set(WABT_LIBRARY_CC
   src/common.cc
   src/config.cc
   src/config.h.in
+  src/debug-line.cc
   src/error-formatter.cc
   src/expr-visitor.cc
   src/feature.cc

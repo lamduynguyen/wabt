@@ -68,6 +68,7 @@ class ExprVisitor::Delegate {
  public:
   virtual ~Delegate() {}
 
+  virtual Result OnExpr(Expr*) { return Result::Ok; }
   virtual Result OnUnaryExpr(UnaryExpr*) = 0;
   virtual Result OnBinaryExpr(BinaryExpr*) = 0;
   virtual Result OnTernaryExpr(TernaryExpr*) = 0;

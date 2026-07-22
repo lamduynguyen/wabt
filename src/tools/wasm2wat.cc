@@ -14,19 +14,25 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <cassert>
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
+#include <string>
 
 #include "wabt/apply-names.h"
+#include "wabt/base-types.h"
 #include "wabt/binary-reader-ir.h"
 #include "wabt/binary-reader.h"
+#include "wabt/debug-line.h"
 #include "wabt/error-formatter.h"
 #include "wabt/feature.h"
 #include "wabt/generate-names.h"
 #include "wabt/ir.h"
 #include "wabt/option-parser.h"
+#include "wabt/result.h"
 #include "wabt/stream.h"
 #include "wabt/validator.h"
 #include "wabt/wast-lexer.h"
@@ -45,6 +51,7 @@ static bool s_read_debug_names = true;
 static bool s_fail_on_custom_section_error = true;
 static std::unique_ptr<FileStream> s_log_stream;
 static bool s_validate = true;
+static bool s_annotate_debug_line;
 
 static const char s_description[] =
     R"(  Read a file in the WebAssembly binary format, and convert it to
@@ -88,6 +95,9 @@ static void ParseOptions(int argc, char** argv) {
       []() { s_generate_names = true; });
   parser.AddOption("no-check", "Don't check for invalid modules",
                    []() { s_validate = false; });
+  parser.AddOption("debug-line-comments",
+                   "Annotate output with source locations from .debug_line",
+                   []() { s_annotate_debug_line = true; });
   parser.AddArgument("filename", OptionParser::ArgumentCount::One,
                      [](const char* argument) {
                        s_infile = argument;
@@ -104,6 +114,14 @@ int ProgramMain(int argc, char** argv) {
 
   std::vector<uint8_t> file_data;
   result = ReadFile(s_infile.c_str(), &file_data);
+  struct LineEntry {
+    Offset address;
+    uint32_t line;
+    uint32_t column;
+    std::string file;
+    bool end_sequence;  // gap marker: one byte past a code sequence's end
+  };
+  std::vector<LineEntry> line_ranges;
   if (Succeeded(result)) {
     Errors errors;
     Module module;
@@ -114,6 +132,31 @@ int ProgramMain(int argc, char** argv) {
     result =
         ReadBinaryIr(s_infile.c_str(), file_data, options, &errors, &module);
     if (Succeeded(result)) {
+      if (Succeeded(result) && s_annotate_debug_line) {
+        auto code_start =
+            FindCodeSectionStart(ByteSpan(file_data.data(), file_data.size()));
+        for (const Custom& custom : module.customs) {
+          if (custom.name != ".debug_line" || !code_start)
+            continue;
+          for (const auto& table : DecodeDebugLine(
+                   ByteSpan(custom.data.data(), custom.data.size()))) {
+            for (const auto& row : table.rows) {
+              if (row.end_sequence) {
+                line_ranges.push_back(
+                    {row.address + *code_start, 0, 0, "", true});
+                continue;
+              }
+              std::string name =
+                  row.file < table.files.size() ? table.files[row.file] : "";
+              line_ranges.push_back({row.address + *code_start, row.line,
+                                     row.column, std::move(name), false});
+            }
+          }
+        }
+        std::sort(
+            line_ranges.begin(), line_ranges.end(),
+            [](const auto& a, const auto& b) { return a.address < b.address; });
+      }
       if (Succeeded(result) && s_validate) {
         ValidateOptions options(s_features);
         result = ValidateModule(&module, &errors, options);
@@ -135,6 +178,24 @@ int ProgramMain(int argc, char** argv) {
         wat_options.fold_exprs = s_fold_exprs;
         wat_options.inline_import = s_inline_import;
         wat_options.inline_export = s_inline_export;
+        wat_options.location_comment =
+            [&](Offset offset) -> std::optional<std::string> {
+          if (offset == 0 || line_ranges.empty())
+            return std::nullopt;
+          auto it = std::upper_bound(
+              line_ranges.begin(), line_ranges.end(), offset - 1,
+              [](Offset value, const auto& e) { return value < e.address; });
+          if (it == line_ranges.begin())
+            return std::nullopt;
+          --it;
+          if (it->end_sequence)  // offset falls in a gap between code ranges
+            return std::nullopt;
+          std::string comment = it->file + ":" + std::to_string(it->line);
+          if (it->column != 0) {
+            comment += ":" + std::to_string(it->column);  // main.cc:31:7
+          }
+          return comment;
+        };
         FileStream stream(!s_outfile.empty() ? FileStream(s_outfile)
                                              : FileStream(stdout));
         result = WriteWat(&stream, &module, wat_options);

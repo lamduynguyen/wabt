@@ -17,6 +17,10 @@
 #ifndef WABT_WAT_WRITER_H_
 #define WABT_WAT_WRITER_H_
 
+#include <optional>
+#include <string>
+#include <functional>
+#include "wabt/base-types.h"
 #include "wabt/common.h"
 #include "wabt/feature.h"
 
@@ -32,6 +36,7 @@ struct WriteWatOptions {
   bool fold_exprs = false;  // Write folded expressions.
   bool inline_export = false;
   bool inline_import = false;
+  std::function<std::optional<std::string>(Offset)> location_comment;
 };
 
 Result WriteWat(Stream*, const Module*, const WriteWatOptions&);

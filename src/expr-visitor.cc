@@ -166,6 +166,7 @@ Result ExprVisitor::VisitFunc(Func* func) {
 }
 
 Result ExprVisitor::HandleDefaultState(Expr* expr) {
+  CHECK_RESULT(delegate_->OnExpr(expr));
   switch (expr->type()) {
     case ExprType::AtomicLoad:
       CHECK_RESULT(delegate_->OnAtomicLoadExpr(cast<AtomicLoadExpr>(expr)));

@@ -143,6 +143,7 @@ class WatWriter : ModuleContext {
   template <typename T>
   void WriteMemoryLoadStoreExpr(const Expr* expr);
   void WriteExprList(const ExprList& exprs);
+  void WriteLocationComment(Offset offset);
   void WriteInitExpr(const ExprList& expr);
   template <typename T>
   void WriteTypeBindings(const char* prefix,
@@ -199,6 +200,7 @@ class WatWriter : ModuleContext {
   Index tag_index_ = 0;
   Index data_segment_index_ = 0;
   Index elem_segment_index_ = 0;
+  std::optional<std::string> last_location_comment_;
 };
 
 void WatWriter::Indent() {
@@ -549,6 +551,7 @@ class WatWriter::ExprVisitorDelegate : public ExprVisitor::Delegate {
  public:
   explicit ExprVisitorDelegate(WatWriter* writer) : writer_(writer) {}
 
+  Result OnExpr(Expr*) override;
   Result OnBinaryExpr(BinaryExpr*) override;
   Result OnQuaternaryExpr(QuaternaryExpr*) override;
   Result BeginBlockExpr(BlockExpr*) override;
@@ -1206,6 +1209,24 @@ void WatWriter::WriteExpr(const Expr* expr) {
   (void)visitor.VisitExpr(const_cast<Expr*>(expr));
 }
 
+Result WatWriter::ExprVisitorDelegate::OnExpr(Expr* expr) {
+  if (!writer_->options_.fold_exprs) {
+    writer_->WriteLocationComment(expr->loc.offset);
+  }
+  return Result::Ok;
+}
+
+void WatWriter::WriteLocationComment(Offset offset) {
+  if (!options_.location_comment) {
+    return;
+  }
+  std::optional<std::string> comment = options_.location_comment(offset);
+  if (comment && comment != last_location_comment_) {
+    WritePutsNewline((";; " + *comment).c_str());
+    last_location_comment_ = comment;
+  }
+}
+
 void WatWriter::WriteExprList(const ExprList& exprs) {
   WABT_TRACE(WriteExprList);
   ExprVisitorDelegate delegate(this);
@@ -1522,6 +1543,7 @@ void WatWriter::WriteFunc(const Func& func) {
   }
   WriteNewline(NO_FORCE_NEWLINE);
   BeginFunc(func);
+  last_location_comment_.reset();  // per-function scope for comment suppression
   if (options_.fold_exprs) {
     WriteFoldedExprList(func.exprs);
     FlushExprTreeStack();
