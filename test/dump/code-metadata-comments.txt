@@ -1,0 +1,21 @@
+;;; TOOL: run-wasm2wat
+;;; ARGS0: --enable-annotations --enable-code-metadata
+;;; ARGS1: --code-metadata-comments
+(module
+  (func $printable (result i32)
+    (@metadata.code.provenance "Pipeline#0 > Selection#0  t_pk == 42") i32.const 1
+    return)
+  (func $binary (result i32)
+    (@metadata.code.provenance "aa\ff") i32.const 2
+    return))
+(;; STDOUT ;;;
+(module
+  (type (;0;) (func (result i32)))
+  (func (;0;) (type 0) (result i32)
+    ;; Pipeline#0 > Selection#0  t_pk == 42
+    i32.const 1
+    return)
+  (func (;1;) (type 0) (result i32)
+    (@metadata.code.provenance "aa\ff") i32.const 2
+    return))
+;;; STDOUT ;;)

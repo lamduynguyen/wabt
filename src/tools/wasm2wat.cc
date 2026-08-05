@@ -39,6 +39,7 @@ static std::string s_outfile;
 static Features s_features;
 static bool s_generate_names;
 static bool s_fold_exprs;
+static bool s_code_metadata_comments;
 static bool s_inline_import;
 static bool s_inline_export;
 static bool s_read_debug_names = true;
@@ -86,6 +87,11 @@ static void ParseOptions(int argc, char** argv) {
       "generate-names",
       "Give auto-generated names to non-named functions, types, etc.",
       []() { s_generate_names = true; });
+  parser.AddOption("code-metadata-comments",
+                   "Write metadata.code.* annotations as ;; comments", []() {
+                     s_code_metadata_comments = true;
+                     s_features.enable_code_metadata();
+                   });
   parser.AddOption("no-check", "Don't check for invalid modules",
                    []() { s_validate = false; });
   parser.AddArgument("filename", OptionParser::ArgumentCount::One,
@@ -135,6 +141,7 @@ int ProgramMain(int argc, char** argv) {
         wat_options.fold_exprs = s_fold_exprs;
         wat_options.inline_import = s_inline_import;
         wat_options.inline_export = s_inline_export;
+        wat_options.code_metadata_comments = s_code_metadata_comments;
         FileStream stream(!s_outfile.empty() ? FileStream(s_outfile)
                                              : FileStream(stdout));
         result = WriteWat(&stream, &module, wat_options);
