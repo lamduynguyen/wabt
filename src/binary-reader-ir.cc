@@ -831,8 +831,8 @@ Result BinaryReaderIR::OnLocalDecl(Index decl_index, Index count, Type type) {
 }
 
 Result BinaryReaderIR::OnOpcode(Opcode opcode) {
-  std::unique_ptr<CodeMetadataExpr> metadata =
-      code_metadata_queue_.pop_match(current_func_, GetLocation().offset - 1);
+  std::unique_ptr<CodeMetadataExpr> metadata = code_metadata_queue_.pop_match(
+      current_func_, GetLocation().offset - opcode.GetLength());
   if (metadata) {
     return AppendExpr(std::move(metadata));
   }

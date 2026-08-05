@@ -1,0 +1,11 @@
+;;; TOOL: run-roundtrip
+;;; ARGS: --enable-annotations --enable-code-metadata
+;; memory.copy is FC-prefixed; a mismatch there wedged the queue, hence "after".
+(module
+  (memory 1)
+  (func $f
+    i32.const 0
+    i32.const 8
+    i32.const 4
+    (@metadata.code.test "on-memcopy") memory.copy
+    (@metadata.code.test "after") nop))

@@ -32,6 +32,8 @@ struct WriteWatOptions {
   bool fold_exprs = false;  // Write folded expressions.
   bool inline_export = false;
   bool inline_import = false;
+  // Write metadata.code.* as ;; comments; lossy, does not round-trip.
+  bool code_metadata_comments = false;
 };
 
 Result WriteWat(Stream*, const Module*, const WriteWatOptions&);

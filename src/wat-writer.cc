@@ -720,6 +720,15 @@ Result WatWriter::ExprVisitorDelegate::OnCallRefExpr(CallRefExpr* expr) {
 
 Result WatWriter::ExprVisitorDelegate::OnCodeMetadataExpr(
     CodeMetadataExpr* expr) {
+  // Comments carry text only; binary payloads keep the annotation form.
+  if (writer_->options_.code_metadata_comments &&
+      std::all_of(expr->data.begin(), expr->data.end(),
+                  [](uint8_t c) { return c >= 0x20 && c < 0x7f; })) {
+    writer_->WritePuts(";; ", NextChar::None);
+    writer_->WriteDataWithNextChar(expr->data.data(), expr->data.size());
+    writer_->WriteNewline(/*force=*/true);
+    return Result::Ok;
+  }
   writer_->WriteOpen("@metadata.code.", NextChar::None);
   writer_->WriteDataWithNextChar(expr->name.data(), expr->name.size());
   writer_->WritePutc(' ');
